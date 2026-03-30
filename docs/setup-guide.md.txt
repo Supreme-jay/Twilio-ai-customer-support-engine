@@ -1,0 +1,29 @@
+# Setup Guide
+
+## Requirements
+- n8n instance
+- Twilio account
+- Airtable base
+- Google Gemini API access
+
+## Main Workflows
+- WF1 - Customer Support Engine
+- WF2 - Daily Support Analytics
+- WF3 - System Error Logger
+
+## Airtable Tables
+- Orders
+- Ticket
+- Daily Analytics
+- System Errors
+
+## Twilio Setup
+- Join Twilio WhatsApp Sandbox
+- Set the inbound webhook URL to the production n8n webhook
+- Use Twilio credentials for outbound WhatsApp replies
+
+## n8n Setup
+Import the workflow JSON files into n8n and update credentials for:
+- Airtable
+- Twilio
+- Gemini

@@ -1,0 +1,4198 @@
+{
+  "name": "WF1 - Customer Support Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "support-whatsapp",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1344,
+        -256
+      ],
+      "id": "f2ab2784-7ee4-48c5-aa6d-9bba2310f744",
+      "name": "Webhook",
+      "webhookId": "4db8b379-7576-4c4f-9f0b-3d1d304ca0f0"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "let raw = $json.text || $json.output || $json.response || '';\n\n// Remove markdown code fences if present\nif (typeof raw === 'string') {\n  raw = raw.trim();\n\n  if (raw.startsWith('```json')) {\n    raw = raw.replace(/^```json\\s*/i, '').replace(/\\s*```$/i, '');\n  } else if (raw.startsWith('```')) {\n    raw = raw.replace(/^```\\s*/i, '').replace(/\\s*```$/i, '');\n  }\n}\n\nconst parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;\n\nreturn {\n  json: {\n    customer_phone: $('Webhook').first().json.body?.From || $('Webhook').first().json.From || '',\n    customer_message: $('Webhook').first().json.body?.Body || $('Webhook').first().json.Body || '',\n    customer_name: $('Webhook').first().json.body?.ProfileName || $('Webhook').first().json.ProfileName || 'Customer',\n    category: parsed.category || 'general',\n    order_id: (parsed.order_id || '').toUpperCase(),\n    summary: parsed.summary || '',\n    needs_human: parsed.needs_human || false,\n    channel: 'Whatsapp',\n    received_at: new Date().toISOString(),\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -640,
+        -256
+      ],
+      "id": "b068d5fe-0251-480c-a44c-317ef4d8c519",
+      "name": "ParseIntent"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appGHmrQxKT7b6Iim",
+          "mode": "list",
+          "cachedResultName": "Customer Support Ops",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblqvmv3j3kKfST6L",
+          "mode": "list",
+          "cachedResultName": "Orders",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim/tblqvmv3j3kKfST6L"
+        },
+        "filterByFormula": "={Order ID} = \"{{ $json[\"order_id\"] }}\"",
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -848,
+        -64
+      ],
+      "id": "34682106-4c33-4086-817f-9d1b14bed572",
+      "name": "Search records",
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "dXCdQFhiS8XBicLs",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "07829801-deb4-4332-9c2e-cf8221aa657b",
+              "leftValue": "={{ $json[\"Order ID\"] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -608,
+        -64
+      ],
+      "id": "b25ffdfd-d197-4603-a53c-9ecb40f38c2e",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    customer_phone: $('ParseIntent').first().json.customer_phone,\n    customer_message: $('ParseIntent').first().json.customer_message,\n    customer_name: $('ParseIntent').first().json.customer_name ||\n    $('Search records').first().json['Customer Name'] || 'Customer',\n    category: $('ParseIntent').first().json.category,\n    order_id: $('Search records').first().json['Order ID'] || $('ParseIntent').first().json.order_id,\n    summary: $('ParseIntent').first().json.summary,\n    needs_human: $('ParseIntent').first().json.needs_human,\n\n    order_status: $('Search records').first().json['Order Status'] || '',\n    tracking_number: $('Search records').first().json['Tracking Number'] || '',\n    carrier: $('Search records').first().json['Carrier'] || '',\n    amount_paid: $('Search records').first().json['Amount Paid'] || 0,\n    return_eligible: $('Search records').first().json['Return Eligible'] || false,\n    refund_eligible: $('Search records').first().json['Refund Eligible'] || false,\n\n    channel: 'Whatsapp',\n    received_at: new Date().toISOString(),\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -336,
+        -560
+      ],
+      "id": "1f1d402a-dd84-4e20-95c7-5259e5e27dc6",
+      "name": "Prepare Order Data"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    reply_text: `Hello ${$json.customer_name}, we could not find a matching order from your message. Please reply with your correct order ID so our team can assist you.`,\n    final_status: 'Escalated',\n    resolution_type: 'Human Review',\n    escalated: true,\n    channel: 'Whatsapp',\n    received_at: new Date().toISOString(),\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        400
+      ],
+      "id": "15ac183c-4993-486d-83db-2eb69fff5ad3",
+      "name": "No Order Found"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json[\"category\"] }}",
+                    "rightValue": "order_status",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "9aa57e7a-c331-44b1-8ff4-332a85b0c607"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "6b5a75b7-ee6e-410f-a71c-15e42f7877cf",
+                    "leftValue": "={{ $json[\"category\"] }}",
+                    "rightValue": "refund",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "13d1fe9c-aa72-450a-beb8-355de361aed3",
+                    "leftValue": "={{ $json[\"category\"] }}",
+                    "rightValue": "wrong_item",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "dc1e933c-aa45-4bda-8683-e290ce72b829",
+                    "leftValue": "={{ $json[\"category\"] }}",
+                    "rightValue": "delayed",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "f560ddd3-d1ba-493d-a3cb-a6f321d533e5",
+                    "leftValue": "={{ $json[\"category\"] }}",
+                    "rightValue": "return",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "8e2e768e-219c-4f8c-8663-08fe8e321d51",
+                    "leftValue": "={{ $json[\"category\"] }}",
+                    "rightValue": "general",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "16bcf460-dd4a-4261-916c-c51869f0258a",
+                    "leftValue": "={{ $json[\"category\"] }}",
+                    "rightValue": "human",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        80,
+        -256
+      ],
+      "id": "6e2d528c-122f-4ef5-849d-c0f0da368bbc",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    reply_text: `Hello ${$json.customer_name}, your order ${$json.order_id} is currently ${$json.order_status}. Tracking number: ${$json.tracking_number}. Carrier: ${$json.carrier}.`,\n    final_status: 'Resolved',\n    resolution_type: 'Auto Reply',\n    escalated: false,\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        -928
+      ],
+      "id": "4e83d8ac-b46d-4f71-af05-ca68078f294c",
+      "name": "Resolve Order Status"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/AC513700bd244989e2596418181f5b6e57/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "whatsapp:+14155238886"
+            },
+            {
+              "name": "To",
+              "value": "={{ $json.customer_phone }}"
+            },
+            {
+              "name": "Body",
+              "value": "={{ $json.reply_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        592,
+        -944
+      ],
+      "id": "89ac0cf5-133b-4026-8051-9150d21f8f4b",
+      "name": "Send Whatsapp Reply",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "7yaJohfW04JKLQEm",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    ticket_phone: String($json.to || '').trim(),\n    ticket_incoming_message: String($('Resolve Order Status').first().json.customer_message || '').trim(),\n    ticket_category: 'Order Status',\n    ticket_order_id: String($('Resolve Order Status').first().json.order_id || '').trim(),\n    ticket_summary: String($('Resolve Order Status').first().json.summary || '').trim(),\n    ticket_status: String($('Resolve Order Status').first().json.final_status || '').trim(),\n    ticket_resolution_type: String($('Resolve Order Status').first().json.resolution_type || '').trim(),\n    ticket_escalated: false,\n    ticket_reply_text: String($('Resolve Order Status').first().json.reply_text || '').trim(),\n    ticket_customer: String($('Resolve Order Status').first().json.customer_name || '').trim(),\n    ticket_intent_confidence: 0,\n    ticket_refund_amount: 0,\n    ticket_response_time_seconds: 0,\n    ticket_auto_resolved_flag: 1,\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        -944
+      ],
+      "id": "6d844dc9-2258-451f-b39a-ebcd0c550392",
+      "name": "Prepare Ticket Record"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const eligible = Boolean($json.refund_eligible);\n\nreturn {\n  json: {\n    ...$json,\n    reply_text: eligible\n      ? `Hello ${$json.customer_name}, your refund request for order ${$json.order_id} has been received and is eligible for processing.`\n      : `Hello ${$json.customer_name}, your refund request for order ${$json.order_id} has been received. A support agent will review it shortly.`,\n    final_status: eligible ? 'Refunded' : 'Escalated',\n    resolution_type: eligible ? 'Auto Refund' : 'Human Review',\n    escalated: eligible ? false : true,\n    refund_amount: eligible ? $json.amount_paid : 0,\n    auto_resolved_flag: eligible ? 1 : 0,\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -672
+      ],
+      "id": "bf195417-6c1c-478f-a3b9-5cd7abcfba83",
+      "name": "Resolve Refund"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/AC513700bd244989e2596418181f5b6e57/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "whatsapp:+14155238886"
+            },
+            {
+              "name": "To",
+              "value": "={{ $json.customer_phone }}"
+            },
+            {
+              "name": "Body",
+              "value": "={{ $json.reply_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        672,
+        -704
+      ],
+      "id": "c56e4927-b1b2-404d-ac10-7f3da96ecb55",
+      "name": "Send Whatsapp Reply - Refund",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "7yaJohfW04JKLQEm",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    ticket_phone: String($json.to || '').trim(),\n    ticket_incoming_message: String($('Resolve Refund').first().json.customer_message || '').trim(),\n    ticket_category: 'Refund Request',\n    ticket_order_id: String($('Resolve Refund').first().json.order_id || '').trim(),\n    ticket_summary: String($('Resolve Refund').first().json.summary || '').trim(),\n    ticket_status: String($('Resolve Refund').first().json.final_status || '').trim(),\n    ticket_resolution_type: String($('Resolve Refund').first().json.resolution_type || '').trim(),\n    ticket_escalated: Boolean($('Resolve Refund').first().json.escalated),\n    ticket_reply_text: String($('Resolve Refund').first().json.reply_text || '').trim(),\n    ticket_customer: String($('Resolve Refund').first().json.customer_name || '').trim(),\n    ticket_intent_confidence: 0,\n    ticket_refund_amount: Number($('Resolve Refund').first().json.refund_amount || 0),\n    ticket_response_time_seconds: 0,\n    ticket_auto_resolved_flag: Number($('Resolve Refund').first().json.auto_resolved_flag || 0),\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        -704
+      ],
+      "id": "b25458aa-994a-4df1-9403-9f4b79acceb4",
+      "name": "Prepare Ticket Record - Refund"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appGHmrQxKT7b6Iim",
+          "mode": "list",
+          "cachedResultName": "Customer Support Ops",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblmxD8oXNyg2hwUG",
+          "mode": "list",
+          "cachedResultName": "Ticket",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim/tblmxD8oXNyg2hwUG"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Escalated": false,
+            "Phone": "={{ $json[\"ticket_phone\"] }}",
+            "Channel": "Whatsapp",
+            "Incoming Message": "={{ $json[\"ticket_incoming_message\"] }}",
+            "Category": "Refund Request",
+            "Order ID": "={{ $json[\"ticket_order_id\"] }}",
+            "Intent Confidence": 0,
+            "AI Summary": "={{ $json[\"ticket_summary\"] }}",
+            "Status": "Refunded",
+            "Resolution Type": "Auto Refund",
+            "Refund Amount": "={{ $json[\"ticket_refund_amount\"] }}\n",
+            "Customer Reply Sent": "={{ $json[\"ticket_reply_text\"] }}",
+            "Customer": "={{ $json[\"ticket_reply_text\"] }}",
+            "Response Time Seconds": 0
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Ticket ID",
+              "displayName": "Ticket ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Created At",
+              "displayName": "Created At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Channel",
+              "displayName": "Channel",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Whatsapp",
+                  "value": "Whatsapp"
+                },
+                {
+                  "name": "Email",
+                  "value": "Email"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Incoming Message",
+              "displayName": "Incoming Message",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Order Status",
+                  "value": "Order Status"
+                },
+                {
+                  "name": "Refund Request",
+                  "value": "Refund Request"
+                },
+                {
+                  "name": "Wrong Item",
+                  "value": "Wrong Item"
+                },
+                {
+                  "name": "Delayed Package",
+                  "value": "Delayed Package"
+                },
+                {
+                  "name": "Return Request",
+                  "value": "Return Request"
+                },
+                {
+                  "name": "General Inquiry",
+                  "value": "General Inquiry"
+                },
+                {
+                  "name": "Human Escalation",
+                  "value": "Human Escalation"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Order ID",
+              "displayName": "Order ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Intent Confidence",
+              "displayName": "Intent Confidence",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "AI Summary",
+              "displayName": "AI Summary",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "New",
+                  "value": "New"
+                },
+                {
+                  "name": "In Progress",
+                  "value": "In Progress"
+                },
+                {
+                  "name": "Resolved",
+                  "value": "Resolved"
+                },
+                {
+                  "name": "Escalated",
+                  "value": "Escalated"
+                },
+                {
+                  "name": "Refunded",
+                  "value": "Refunded"
+                },
+                {
+                  "name": "Waiting",
+                  "value": "Waiting"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Resolution Type",
+              "displayName": "Resolution Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Auto Reply",
+                  "value": "Auto Reply"
+                },
+                {
+                  "name": "Auto Refund",
+                  "value": "Auto Refund"
+                },
+                {
+                  "name": "Human Review",
+                  "value": "Human Review"
+                },
+                {
+                  "name": "Manual Follow-up",
+                  "value": "Manual Follow-up"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Refund Amount",
+              "displayName": "Refund Amount",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Refund ID",
+              "displayName": "Refund ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Escalated",
+              "displayName": "Escalated",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Assigned To",
+              "displayName": "Assigned To",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Customer Reply Sent",
+              "displayName": "Customer Reply Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Response Time Seconds",
+              "displayName": "Response Time Seconds",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Auto Resolved Flag",
+              "displayName": "Auto Resolved Flag",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Customer",
+              "displayName": "Customer",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1360,
+        -720
+      ],
+      "id": "826750ea-3855-42e5-91ef-adf9e14ddf99",
+      "name": "Create Ticket Record - Refund",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "dXCdQFhiS8XBicLs",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    reply_text: `Hello ${$json.customer_name}, we’ve received your report about the wrong item for order ${$json.order_id}. A human support agent will review it shortly.`,\n    final_status: 'Escalated',\n    resolution_type: 'Human Review',\n    escalated: true,\n    refund_amount: 0,\n    auto_resolved_flag: 0,\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        -416
+      ],
+      "id": "6cec038b-f5d5-4976-bfcc-be9538c190a0",
+      "name": "Resolve Wrong Item"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/AC513700bd244989e2596418181f5b6e57/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "whatsapp:+14155238886"
+            },
+            {
+              "name": "To",
+              "value": "={{ $json.customer_phone }}"
+            },
+            {
+              "name": "Body",
+              "value": "={{ $json.reply_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        720,
+        -432
+      ],
+      "id": "9da6146d-18b7-45a8-8ddc-758e8a3ac72f",
+      "name": "Send Whatsapp Reply - Wrong Item",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "7yaJohfW04JKLQEm",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    ticket_phone: String($json.to || '').trim(),\n    ticket_incoming_message: String($('Resolve Wrong Item').first().json.customer_message || '').trim(),\n    ticket_category: 'Wrong Item',\n    ticket_order_id: String($('Resolve Wrong Item').first().json.order_id || '').trim(),\n    ticket_summary: String($('Resolve Wrong Item').first().json.summary || '').trim(),\n    ticket_status: 'Escalated',\n    ticket_resolution_type: 'Human Review',\n    ticket_escalated: true,\n    ticket_reply_text: String($('Resolve Wrong Item').first().json.reply_text || '').trim(),\n    ticket_customer: String($('Resolve Wrong Item').first().json.customer_name || '').trim(),\n    ticket_intent_confidence: 0,\n    ticket_refund_amount: 0,\n    ticket_response_time_seconds: 0,\n    ticket_auto_resolved_flag: 0,\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        -448
+      ],
+      "id": "424d40ed-9346-46a7-b55b-18a1207e623b",
+      "name": "Prepare Ticket Record - Wrong Item"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appGHmrQxKT7b6Iim",
+          "mode": "list",
+          "cachedResultName": "Customer Support Ops",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblmxD8oXNyg2hwUG",
+          "mode": "list",
+          "cachedResultName": "Ticket",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim/tblmxD8oXNyg2hwUG"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Escalated": "={{ true }}",
+            "Channel": "Whatsapp",
+            "Phone": "={{ $json[\"ticket_phone\"] }}",
+            "Incoming Message": "={{ $json[\"ticket_incoming_message\"] }}",
+            "Category": "Wrong Item",
+            "Intent Confidence": 0,
+            "Order ID": "={{ $json[\"ticket_order_id\"] }}",
+            "AI Summary": "={{ $json[\"ticket_summary\"] }}",
+            "Status": "Escalated",
+            "Refund Amount": 0,
+            "Resolution Type": "Human Review",
+            "Response Time Seconds": 0,
+            "Customer Reply Sent": "={{ $json[\"ticket_reply_text\"] }}",
+            "Customer": "={{ $json[\"ticket_customer\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Ticket ID",
+              "displayName": "Ticket ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Created At",
+              "displayName": "Created At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Channel",
+              "displayName": "Channel",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Whatsapp",
+                  "value": "Whatsapp"
+                },
+                {
+                  "name": "Email",
+                  "value": "Email"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Incoming Message",
+              "displayName": "Incoming Message",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Order Status",
+                  "value": "Order Status"
+                },
+                {
+                  "name": "Refund Request",
+                  "value": "Refund Request"
+                },
+                {
+                  "name": "Wrong Item",
+                  "value": "Wrong Item"
+                },
+                {
+                  "name": "Delayed Package",
+                  "value": "Delayed Package"
+                },
+                {
+                  "name": "Return Request",
+                  "value": "Return Request"
+                },
+                {
+                  "name": "General Inquiry",
+                  "value": "General Inquiry"
+                },
+                {
+                  "name": "Human Escalation",
+                  "value": "Human Escalation"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Order ID",
+              "displayName": "Order ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Intent Confidence",
+              "displayName": "Intent Confidence",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "AI Summary",
+              "displayName": "AI Summary",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "New",
+                  "value": "New"
+                },
+                {
+                  "name": "In Progress",
+                  "value": "In Progress"
+                },
+                {
+                  "name": "Resolved",
+                  "value": "Resolved"
+                },
+                {
+                  "name": "Escalated",
+                  "value": "Escalated"
+                },
+                {
+                  "name": "Refunded",
+                  "value": "Refunded"
+                },
+                {
+                  "name": "Waiting",
+                  "value": "Waiting"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Resolution Type",
+              "displayName": "Resolution Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Auto Reply",
+                  "value": "Auto Reply"
+                },
+                {
+                  "name": "Auto Refund",
+                  "value": "Auto Refund"
+                },
+                {
+                  "name": "Human Review",
+                  "value": "Human Review"
+                },
+                {
+                  "name": "Manual Follow-up",
+                  "value": "Manual Follow-up"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Refund Amount",
+              "displayName": "Refund Amount",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Refund ID",
+              "displayName": "Refund ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Escalated",
+              "displayName": "Escalated",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Assigned To",
+              "displayName": "Assigned To",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Customer Reply Sent",
+              "displayName": "Customer Reply Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Response Time Seconds",
+              "displayName": "Response Time Seconds",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Auto Resolved Flag",
+              "displayName": "Auto Resolved Flag",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Customer",
+              "displayName": "Customer",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1328,
+        -448
+      ],
+      "id": "80809661-83ed-42fa-9aee-fccde457d61e",
+      "name": "Create Ticket Record - Wrong Item",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "dXCdQFhiS8XBicLs",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    reply_text: `Hello ${$json.customer_name}, your order ${$json.order_id} is currently delayed. Current status: ${$json.order_status}. Tracking number: ${$json.tracking_number}. Carrier: ${$json.carrier}. A support agent will continue to monitor it.`,\n    final_status: 'Waiting',\n    resolution_type: 'Manual Follow-up',\n    escalated: true,\n    refund_amount: 0,\n    auto_resolved_flag: 0,\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -176
+      ],
+      "id": "04b4a484-2f17-4290-a2ee-f3484dcb37db",
+      "name": "Resolve Delay"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/AC513700bd244989e2596418181f5b6e57/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "whatsapp:+14155238886"
+            },
+            {
+              "name": "To",
+              "value": "={{ $json.customer_phone }}"
+            },
+            {
+              "name": "Body",
+              "value": "={{ $json.reply_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        784,
+        -192
+      ],
+      "id": "633432b4-6e92-4309-8812-d88052146221",
+      "name": "Send Whatsapp Reply - Delay",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "7yaJohfW04JKLQEm",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    ticket_phone: String($json.to || '').trim(),\n    ticket_incoming_message: String($('Resolve Delay').first().json.customer_message || '').trim(),\n    ticket_category: 'Delayed Package',\n    ticket_order_id: String($('Resolve Delay').first().json.order_id || '').trim(),\n    ticket_summary: String($('Resolve Delay').first().json.summary || '').trim(),\n    ticket_status: 'Waiting',\n    ticket_resolution_type: 'Manual Follow-up',\n    ticket_escalated: true,\n    ticket_reply_text: String($('Resolve Delay').first().json.reply_text || '').trim(),\n    ticket_customer: String($('Resolve Delay').first().json.customer_name || '').trim(),\n    ticket_intent_confidence: 0,\n    ticket_refund_amount: 0,\n    ticket_response_time_seconds: 0,\n    ticket_auto_resolved_flag: 0,\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        -192
+      ],
+      "id": "508fe43c-7d5e-447c-aa77-ce53a068b698",
+      "name": "Prepare Ticket Record - Delay"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appGHmrQxKT7b6Iim",
+          "mode": "list",
+          "cachedResultName": "Customer Support Ops",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblmxD8oXNyg2hwUG",
+          "mode": "list",
+          "cachedResultName": "Ticket",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim/tblmxD8oXNyg2hwUG"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Escalated": true,
+            "Channel": "Whatsapp",
+            "Category": "Delayed Package",
+            "Phone": "={{ $json[\"ticket_phone\"] }}",
+            "Intent Confidence": 0,
+            "Refund Amount": 0,
+            "Response Time Seconds": 0,
+            "Incoming Message": "={{ $json[\"ticket_incoming_message\"] }}",
+            "Order ID": "={{ $json[\"ticket_order_id\"] }}",
+            "Status": "Waiting",
+            "AI Summary": "={{ $json[\"ticket_summary\"] }}",
+            "Customer Reply Sent": "={{ $json[\"ticket_reply_text\"] }}",
+            "Customer": "={{ $json[\"ticket_customer\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Ticket ID",
+              "displayName": "Ticket ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Created At",
+              "displayName": "Created At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Channel",
+              "displayName": "Channel",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Whatsapp",
+                  "value": "Whatsapp"
+                },
+                {
+                  "name": "Email",
+                  "value": "Email"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Incoming Message",
+              "displayName": "Incoming Message",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Order Status",
+                  "value": "Order Status"
+                },
+                {
+                  "name": "Refund Request",
+                  "value": "Refund Request"
+                },
+                {
+                  "name": "Wrong Item",
+                  "value": "Wrong Item"
+                },
+                {
+                  "name": "Delayed Package",
+                  "value": "Delayed Package"
+                },
+                {
+                  "name": "Return Request",
+                  "value": "Return Request"
+                },
+                {
+                  "name": "General Inquiry",
+                  "value": "General Inquiry"
+                },
+                {
+                  "name": "Human Escalation",
+                  "value": "Human Escalation"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Order ID",
+              "displayName": "Order ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Intent Confidence",
+              "displayName": "Intent Confidence",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "AI Summary",
+              "displayName": "AI Summary",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "New",
+                  "value": "New"
+                },
+                {
+                  "name": "In Progress",
+                  "value": "In Progress"
+                },
+                {
+                  "name": "Resolved",
+                  "value": "Resolved"
+                },
+                {
+                  "name": "Escalated",
+                  "value": "Escalated"
+                },
+                {
+                  "name": "Refunded",
+                  "value": "Refunded"
+                },
+                {
+                  "name": "Waiting",
+                  "value": "Waiting"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Resolution Type",
+              "displayName": "Resolution Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Auto Reply",
+                  "value": "Auto Reply"
+                },
+                {
+                  "name": "Auto Refund",
+                  "value": "Auto Refund"
+                },
+                {
+                  "name": "Human Review",
+                  "value": "Human Review"
+                },
+                {
+                  "name": "Manual Follow-up",
+                  "value": "Manual Follow-up"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Refund Amount",
+              "displayName": "Refund Amount",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Refund ID",
+              "displayName": "Refund ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Escalated",
+              "displayName": "Escalated",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Assigned To",
+              "displayName": "Assigned To",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Customer Reply Sent",
+              "displayName": "Customer Reply Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Response Time Seconds",
+              "displayName": "Response Time Seconds",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Auto Resolved Flag",
+              "displayName": "Auto Resolved Flag",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Customer",
+              "displayName": "Customer",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1488,
+        -192
+      ],
+      "id": "5465bc9b-7395-4743-9cc9-cb3dfa35fbf7",
+      "name": "Create Ticket Record - Delay",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "dXCdQFhiS8XBicLs",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const eligible = Boolean($json.return_eligible);\n\nreturn {\n  json: {\n    ...$json,\n    reply_text: eligible\n      ? `Hello ${$json.customer_name}, your return request for order ${$json.order_id} has been received. Our support team will guide you through the next steps shortly.`\n      : `Hello ${$json.customer_name}, your return request for order ${$json.order_id} has been received. A support agent will review your eligibility and contact you shortly.`,\n    final_status: 'Escalated',\n    resolution_type: 'Manual Follow-up',\n    escalated: true,\n    refund_amount: 0,\n    auto_resolved_flag: 0,\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        544,
+        0
+      ],
+      "id": "c66ea290-6831-4711-953c-8fde50937eff",
+      "name": "Resolve Return"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/AC513700bd244989e2596418181f5b6e57/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "whatsapp:+14155238886"
+            },
+            {
+              "name": "To",
+              "value": "={{ $json.customer_phone }}"
+            },
+            {
+              "name": "Body",
+              "value": "={{ $json.reply_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        848,
+        48
+      ],
+      "id": "9e8395c8-bb39-476b-9eb4-657408aa91dd",
+      "name": "Send Whatsapp Reply - Return",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "7yaJohfW04JKLQEm",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    ticket_phone: String($json.to || '').trim(),\n    ticket_incoming_message: String($('Resolve Return').first().json.customer_message || '').trim(),\n    ticket_category: 'Return Request',\n    ticket_order_id: String($('Resolve Return').first().json.order_id || '').trim(),\n    ticket_summary: String($('Resolve Return').first().json.summary || '').trim(),\n    ticket_status: 'Escalated',\n    ticket_resolution_type: 'Manual Follow-up',\n    ticket_escalated: true,\n    ticket_reply_text: String($('Resolve Return').first().json.reply_text || '').trim(),\n    ticket_customer: String($('Resolve Return').first().json.customer_name || '').trim(),\n    ticket_intent_confidence: 0,\n    ticket_refund_amount: 0,\n    ticket_response_time_seconds: 0,\n    ticket_auto_resolved_flag: 0,\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        48
+      ],
+      "id": "f2c10990-fca8-4761-9c33-b90943c5ed84",
+      "name": "Prepare Ticket Record - Return"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appGHmrQxKT7b6Iim",
+          "mode": "list",
+          "cachedResultName": "Customer Support Ops",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblmxD8oXNyg2hwUG",
+          "mode": "list",
+          "cachedResultName": "Ticket",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim/tblmxD8oXNyg2hwUG"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Escalated": true,
+            "Channel": "Whatsapp",
+            "Category": "Return Request",
+            "Phone": "={{ $json[\"ticket_phone\"] }}",
+            "Intent Confidence": 0,
+            "Refund Amount": 0,
+            "Response Time Seconds": 0,
+            "Incoming Message": "={{ $json[\"ticket_incoming_message\"] }}",
+            "Order ID": "={{ $json[\"ticket_order_id\"] }}",
+            "AI Summary": "={{ $json[\"ticket_summary\"] }}",
+            "Customer Reply Sent": "={{ $json[\"ticket_reply_text\"] }}",
+            "Customer": "={{ $json[\"ticket_customer\"] }}",
+            "Status": "Escalated",
+            "Resolution Type": "Manual Follow-up"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Ticket ID",
+              "displayName": "Ticket ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Created At",
+              "displayName": "Created At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Channel",
+              "displayName": "Channel",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Whatsapp",
+                  "value": "Whatsapp"
+                },
+                {
+                  "name": "Email",
+                  "value": "Email"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Incoming Message",
+              "displayName": "Incoming Message",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Order Status",
+                  "value": "Order Status"
+                },
+                {
+                  "name": "Refund Request",
+                  "value": "Refund Request"
+                },
+                {
+                  "name": "Wrong Item",
+                  "value": "Wrong Item"
+                },
+                {
+                  "name": "Delayed Package",
+                  "value": "Delayed Package"
+                },
+                {
+                  "name": "Return Request",
+                  "value": "Return Request"
+                },
+                {
+                  "name": "General Inquiry",
+                  "value": "General Inquiry"
+                },
+                {
+                  "name": "Human Escalation",
+                  "value": "Human Escalation"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Order ID",
+              "displayName": "Order ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Intent Confidence",
+              "displayName": "Intent Confidence",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "AI Summary",
+              "displayName": "AI Summary",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "New",
+                  "value": "New"
+                },
+                {
+                  "name": "In Progress",
+                  "value": "In Progress"
+                },
+                {
+                  "name": "Resolved",
+                  "value": "Resolved"
+                },
+                {
+                  "name": "Escalated",
+                  "value": "Escalated"
+                },
+                {
+                  "name": "Refunded",
+                  "value": "Refunded"
+                },
+                {
+                  "name": "Waiting",
+                  "value": "Waiting"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Resolution Type",
+              "displayName": "Resolution Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Auto Reply",
+                  "value": "Auto Reply"
+                },
+                {
+                  "name": "Auto Refund",
+                  "value": "Auto Refund"
+                },
+                {
+                  "name": "Human Review",
+                  "value": "Human Review"
+                },
+                {
+                  "name": "Manual Follow-up",
+                  "value": "Manual Follow-up"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Refund Amount",
+              "displayName": "Refund Amount",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Refund ID",
+              "displayName": "Refund ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Escalated",
+              "displayName": "Escalated",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Assigned To",
+              "displayName": "Assigned To",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Customer Reply Sent",
+              "displayName": "Customer Reply Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Response Time Seconds",
+              "displayName": "Response Time Seconds",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Auto Resolved Flag",
+              "displayName": "Auto Resolved Flag",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Customer",
+              "displayName": "Customer",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1456,
+        48
+      ],
+      "id": "f60ccb24-01dd-4f3c-bdbb-200027ebbf2e",
+      "name": "Create Ticket Record - Return",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "dXCdQFhiS8XBicLs",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    reply_text: `Hello ${$json.customer_name}, thank you for contacting support. Your request has been received and a support agent will review it shortly.`,\n    final_status: 'In Progress',\n    resolution_type: 'Manual Follow-up',\n    escalated: true,\n    refund_amount: 0,\n    auto_resolved_flag: 0,\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        256
+      ],
+      "id": "4d82d4a4-eedf-4418-8f28-f8b246f846e1",
+      "name": "Resolve General"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/AC513700bd244989e2596418181f5b6e57/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "whatsapp:+14155238886"
+            },
+            {
+              "name": "To",
+              "value": "={{ $json.customer_phone }}"
+            },
+            {
+              "name": "Body",
+              "value": "={{ $json.reply_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        992,
+        272
+      ],
+      "id": "dc9962c8-0afe-45ff-b929-f1f61ec707e4",
+      "name": "Send Whatsapp Reply - General",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "7yaJohfW04JKLQEm",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    ticket_phone: String($json.to || '').trim(),\n    ticket_incoming_message: String($('Resolve General').first().json.customer_message || '').trim(),\n    ticket_category: 'General Inquiry',\n    ticket_order_id: String($('Resolve General').first().json.order_id || '').trim(),\n    ticket_summary: String($('Resolve General').first().json.summary || '').trim(),\n    ticket_status: 'In Progress',\n    ticket_resolution_type: 'Manual Follow-up',\n    ticket_escalated: true,\n    ticket_reply_text: String($('Resolve General').first().json.reply_text || '').trim(),\n    ticket_customer: String($('Resolve General').first().json.customer_name || '').trim(),\n    ticket_intent_confidence: 0,\n    ticket_refund_amount: 0,\n    ticket_response_time_seconds: 0,\n    ticket_auto_resolved_flag: 0,\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        256
+      ],
+      "id": "4439ffea-c31c-44f6-94f7-8522bdc7657e",
+      "name": "Prepare Ticket Record - General"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appGHmrQxKT7b6Iim",
+          "mode": "list",
+          "cachedResultName": "Customer Support Ops",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblmxD8oXNyg2hwUG",
+          "mode": "list",
+          "cachedResultName": "Ticket",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim/tblmxD8oXNyg2hwUG"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Escalated": true,
+            "Channel": "Whatsapp",
+            "Phone": "={{ $json[\"ticket_phone\"] }}",
+            "Category": "General Inquiry",
+            "Intent Confidence": 0,
+            "Refund Amount": 0,
+            "Response Time Seconds": 0,
+            "Incoming Message": "={{ $json[\"ticket_incoming_message\"] }}",
+            "Order ID": "={{ $json[\"ticket_order_id\"] }}",
+            "AI Summary": "={{ $json[\"ticket_summary\"] }}",
+            "Customer Reply Sent": "={{ $json[\"ticket_reply_text\"] }}",
+            "Customer": "={{ $json[\"ticket_customer\"] }}",
+            "Status": "In Progress",
+            "Resolution Type": "Manual Follow-up"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Ticket ID",
+              "displayName": "Ticket ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Created At",
+              "displayName": "Created At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Channel",
+              "displayName": "Channel",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Whatsapp",
+                  "value": "Whatsapp"
+                },
+                {
+                  "name": "Email",
+                  "value": "Email"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Incoming Message",
+              "displayName": "Incoming Message",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Order Status",
+                  "value": "Order Status"
+                },
+                {
+                  "name": "Refund Request",
+                  "value": "Refund Request"
+                },
+                {
+                  "name": "Wrong Item",
+                  "value": "Wrong Item"
+                },
+                {
+                  "name": "Delayed Package",
+                  "value": "Delayed Package"
+                },
+                {
+                  "name": "Return Request",
+                  "value": "Return Request"
+                },
+                {
+                  "name": "General Inquiry",
+                  "value": "General Inquiry"
+                },
+                {
+                  "name": "Human Escalation",
+                  "value": "Human Escalation"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Order ID",
+              "displayName": "Order ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Intent Confidence",
+              "displayName": "Intent Confidence",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "AI Summary",
+              "displayName": "AI Summary",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "New",
+                  "value": "New"
+                },
+                {
+                  "name": "In Progress",
+                  "value": "In Progress"
+                },
+                {
+                  "name": "Resolved",
+                  "value": "Resolved"
+                },
+                {
+                  "name": "Escalated",
+                  "value": "Escalated"
+                },
+                {
+                  "name": "Refunded",
+                  "value": "Refunded"
+                },
+                {
+                  "name": "Waiting",
+                  "value": "Waiting"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Resolution Type",
+              "displayName": "Resolution Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Auto Reply",
+                  "value": "Auto Reply"
+                },
+                {
+                  "name": "Auto Refund",
+                  "value": "Auto Refund"
+                },
+                {
+                  "name": "Human Review",
+                  "value": "Human Review"
+                },
+                {
+                  "name": "Manual Follow-up",
+                  "value": "Manual Follow-up"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Refund Amount",
+              "displayName": "Refund Amount",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Refund ID",
+              "displayName": "Refund ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Escalated",
+              "displayName": "Escalated",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Assigned To",
+              "displayName": "Assigned To",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Customer Reply Sent",
+              "displayName": "Customer Reply Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Response Time Seconds",
+              "displayName": "Response Time Seconds",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Auto Resolved Flag",
+              "displayName": "Auto Resolved Flag",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Customer",
+              "displayName": "Customer",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1648,
+        224
+      ],
+      "id": "264fca45-7fad-4819-8a41-a95cca3ca625",
+      "name": "Create Ticket Record - General",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "dXCdQFhiS8XBicLs",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7ce66533-0c2c-4a78-9e73-d30d15f5c6e4",
+              "leftValue": "={{ $item(0).$node[\"ParseIntent\"].json[\"category\"] }}",
+              "rightValue": "general",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "ea6b8264-33a8-40a7-9f25-abad7136c35c",
+              "leftValue": "={{ $item(0).$node[\"ParseIntent\"].json[\"category\"] }}",
+              "rightValue": "human",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -320,
+        416
+      ],
+      "id": "ef81c3f3-8ed2-48b9-a9f1-f79266707e8d",
+      "name": "Allow Non-Order Routing"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    customer_phone: $('ParseIntent').first().json.customer_phone,\n    customer_message: $('ParseIntent').first().json.customer_message,\n    customer_name: $('ParseIntent').first().json.customer_name,\n    category: $('ParseIntent').first().json.category,\n    order_id: $('ParseIntent').first().json.order_id || '',\n    summary: $('ParseIntent').first().json.summary,\n    needs_human: $('ParseIntent').first().json.needs_human,\n\n    order_status: '',\n    tracking_number: '',\n    carrier: '',\n    amount_paid: 0,\n    return_eligible: false,\n    refund_eligible: false,\n\n    channel: 'Whatsapp',\n    received_at: new Date().toISOString(),\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        128
+      ],
+      "id": "668129a8-f266-49a3-b2c4-67b6a9143c98",
+      "name": "Prepare Non-Order Data"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    reply_text: `Hello ${$json.customer_name}, we’ve received your message and a human support agent will review it shortly.`,\n    final_status: 'Escalated',\n    resolution_type: 'Human Review',\n    escalated: true,\n    refund_amount: 0,\n    auto_resolved_flag: 0,\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        464
+      ],
+      "id": "f9788393-2aa6-4a64-a67e-a15c02f4092d",
+      "name": "Escalate to Human"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/AC513700bd244989e2596418181f5b6e57/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "whatsapp:+14155238886"
+            },
+            {
+              "name": "To",
+              "value": "={{ $json.customer_phone }}\n"
+            },
+            {
+              "name": "Body",
+              "value": "={{ $json.reply_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        928,
+        480
+      ],
+      "id": "c492ce9a-7da0-4ab3-8d29-af171a2680e4",
+      "name": "Send Whatsapp Reply - Human",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "7yaJohfW04JKLQEm",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    ticket_phone: String($json.to || '').trim(),\n    ticket_incoming_message: String($('Escalate to Human').first().json.customer_message || '').trim(),\n    ticket_category: 'Human Escalation',\n    ticket_order_id: String($('Escalate to Human').first().json.order_id || '').trim(),\n    ticket_summary: String($('Escalate to Human').first().json.summary || '').trim(),\n    ticket_status: 'Escalated',\n    ticket_resolution_type: 'Human Review',\n    ticket_escalated: true,\n    ticket_reply_text: String($('Escalate to Human').first().json.reply_text || '').trim(),\n    ticket_customer: String($('Escalate to Human').first().json.customer_name || '').trim(),\n    ticket_intent_confidence: 0,\n    ticket_refund_amount: 0,\n    ticket_response_time_seconds: 0,\n    ticket_auto_resolved_flag: 0,\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        464
+      ],
+      "id": "c46bf34c-94e6-4fc3-b217-c55b45c0aa13",
+      "name": "Prepare Ticket Record - Human"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appGHmrQxKT7b6Iim",
+          "mode": "list",
+          "cachedResultName": "Customer Support Ops",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblmxD8oXNyg2hwUG",
+          "mode": "list",
+          "cachedResultName": "Ticket",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim/tblmxD8oXNyg2hwUG"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Escalated": true,
+            "Channel": "Whatsapp",
+            "Phone": "={{ $json[\"ticket_phone\"] }}",
+            "Category": "Human Escalation",
+            "Incoming Message": "={{ $json[\"ticket_incoming_message\"] }}",
+            "Intent Confidence": 0,
+            "Refund Amount": 0,
+            "Response Time Seconds": 0,
+            "Order ID": "={{ $json[\"ticket_order_id\"] }}",
+            "AI Summary": "={{ $json[\"ticket_summary\"] }}",
+            "Customer Reply Sent": "={{ $json[\"ticket_reply_text\"] }}",
+            "Customer": "={{ $json[\"ticket_customer\"] }}",
+            "Status": "Escalated",
+            "Resolution Type": "Human Review"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Ticket ID",
+              "displayName": "Ticket ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Created At",
+              "displayName": "Created At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Channel",
+              "displayName": "Channel",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Whatsapp",
+                  "value": "Whatsapp"
+                },
+                {
+                  "name": "Email",
+                  "value": "Email"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Incoming Message",
+              "displayName": "Incoming Message",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Order Status",
+                  "value": "Order Status"
+                },
+                {
+                  "name": "Refund Request",
+                  "value": "Refund Request"
+                },
+                {
+                  "name": "Wrong Item",
+                  "value": "Wrong Item"
+                },
+                {
+                  "name": "Delayed Package",
+                  "value": "Delayed Package"
+                },
+                {
+                  "name": "Return Request",
+                  "value": "Return Request"
+                },
+                {
+                  "name": "General Inquiry",
+                  "value": "General Inquiry"
+                },
+                {
+                  "name": "Human Escalation",
+                  "value": "Human Escalation"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Order ID",
+              "displayName": "Order ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Intent Confidence",
+              "displayName": "Intent Confidence",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "AI Summary",
+              "displayName": "AI Summary",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "New",
+                  "value": "New"
+                },
+                {
+                  "name": "In Progress",
+                  "value": "In Progress"
+                },
+                {
+                  "name": "Resolved",
+                  "value": "Resolved"
+                },
+                {
+                  "name": "Escalated",
+                  "value": "Escalated"
+                },
+                {
+                  "name": "Refunded",
+                  "value": "Refunded"
+                },
+                {
+                  "name": "Waiting",
+                  "value": "Waiting"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Resolution Type",
+              "displayName": "Resolution Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Auto Reply",
+                  "value": "Auto Reply"
+                },
+                {
+                  "name": "Auto Refund",
+                  "value": "Auto Refund"
+                },
+                {
+                  "name": "Human Review",
+                  "value": "Human Review"
+                },
+                {
+                  "name": "Manual Follow-up",
+                  "value": "Manual Follow-up"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Refund Amount",
+              "displayName": "Refund Amount",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Refund ID",
+              "displayName": "Refund ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Escalated",
+              "displayName": "Escalated",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Assigned To",
+              "displayName": "Assigned To",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Customer Reply Sent",
+              "displayName": "Customer Reply Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Response Time Seconds",
+              "displayName": "Response Time Seconds",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Auto Resolved Flag",
+              "displayName": "Auto Resolved Flag",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Customer",
+              "displayName": "Customer",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1744,
+        464
+      ],
+      "id": "d78f964b-e6b7-4cd4-8ac3-5327a81d9431",
+      "name": "Create Ticket Record - Human",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "dXCdQFhiS8XBicLs",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an e-commerce customer support classifier.\n\nRead the incoming WhatsApp customer message and return only valid JSON in this exact format:\n\n{\n  \"category\": \"\",\n  \"order_id\": \"\",\n  \"summary\": \"\",\n  \"needs_human\": false\n}\n\nAllowed category values:\n- order_status\n- refund\n- wrong_item\n- delayed\n- return\n- general\n- human\n\nRules:\n- If customer asks where an order is or asks for status, use \"order_status\"\n- If customer asks for refund, use \"refund\"\n- If customer says they got the wrong item, use \"wrong_item\"\n- If customer complains package is delayed, use \"delayed\"\n- If customer wants to return an order, use \"return\"\n- If message is general and not order-specific, use \"general\"\n- If message is urgent, angry, emotional, account-related, or should be handled by a person, use \"human\"\n\nExtract the order ID if present, in the format ORD-1001.\nIf no order ID is present, return an empty string.\n\nReturn only JSON.\nDo not wrap the JSON in markdown or code fences.\n\nCustomer message:\n{{ $json.body?.Body || $json.Body }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -1056,
+        -256
+      ],
+      "id": "16430c5e-1f0f-43b8-8323-9b83cf61c538",
+      "name": "Message AI Model"
+    },
+    {
+      "parameters": {
+        "model": "groq/compound-mini",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        -1136,
+        -48
+      ],
+      "id": "5175c88d-d445-4ecc-9737-4cee7b313954",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "IPi5IK495RyaKFb3",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appGHmrQxKT7b6Iim",
+          "mode": "list",
+          "cachedResultName": "Customer Support Ops",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblmxD8oXNyg2hwUG",
+          "mode": "list",
+          "cachedResultName": "Ticket",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim/tblmxD8oXNyg2hwUG"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Escalated": false,
+            "Channel": "Whatsapp",
+            "Phone": "={{ $json.to }}",
+            "Incoming Message": "={{ $json.ticket_incoming_message }}",
+            "Category": "Order Status",
+            "AI Summary": "={{ $json.ticket_summary }}",
+            "Status": "Resolved",
+            "Resolution Type": "Auto Reply",
+            "Customer Reply Sent": "={{ $json.ticket_reply_text }}",
+            "Customer": "={{ $json.ticket_customer }}",
+            "Intent Confidence": 0,
+            "Refund Amount": 0,
+            "Response Time Seconds": 0
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Ticket ID",
+              "displayName": "Ticket ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Created At",
+              "displayName": "Created At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Channel",
+              "displayName": "Channel",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Whatsapp",
+                  "value": "Whatsapp"
+                },
+                {
+                  "name": "Email",
+                  "value": "Email"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Incoming Message",
+              "displayName": "Incoming Message",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Order Status",
+                  "value": "Order Status"
+                },
+                {
+                  "name": "Refund Request",
+                  "value": "Refund Request"
+                },
+                {
+                  "name": "Wrong Item",
+                  "value": "Wrong Item"
+                },
+                {
+                  "name": "Delayed Package",
+                  "value": "Delayed Package"
+                },
+                {
+                  "name": "Return Request",
+                  "value": "Return Request"
+                },
+                {
+                  "name": "General Inquiry",
+                  "value": "General Inquiry"
+                },
+                {
+                  "name": "Human Escalation",
+                  "value": "Human Escalation"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Order ID",
+              "displayName": "Order ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Intent Confidence",
+              "displayName": "Intent Confidence",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "AI Summary",
+              "displayName": "AI Summary",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "New",
+                  "value": "New"
+                },
+                {
+                  "name": "In Progress",
+                  "value": "In Progress"
+                },
+                {
+                  "name": "Resolved",
+                  "value": "Resolved"
+                },
+                {
+                  "name": "Escalated",
+                  "value": "Escalated"
+                },
+                {
+                  "name": "Refunded",
+                  "value": "Refunded"
+                },
+                {
+                  "name": "Waiting",
+                  "value": "Waiting"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Resolution Type",
+              "displayName": "Resolution Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Auto Reply",
+                  "value": "Auto Reply"
+                },
+                {
+                  "name": "Auto Refund",
+                  "value": "Auto Refund"
+                },
+                {
+                  "name": "Human Review",
+                  "value": "Human Review"
+                },
+                {
+                  "name": "Manual Follow-up",
+                  "value": "Manual Follow-up"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Refund Amount",
+              "displayName": "Refund Amount",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Refund ID",
+              "displayName": "Refund ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Escalated",
+              "displayName": "Escalated",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Assigned To",
+              "displayName": "Assigned To",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Customer Reply Sent",
+              "displayName": "Customer Reply Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Response Time Seconds",
+              "displayName": "Response Time Seconds",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Auto Resolved Flag",
+              "displayName": "Auto Resolved Flag",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Customer",
+              "displayName": "Customer",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1072,
+        -944
+      ],
+      "id": "8200331d-73fb-4355-97c7-b3e94d20e103",
+      "name": "Create a record",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "dXCdQFhiS8XBicLs",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/AC513700bd244989e2596418181f5b6e57/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "whatsapp:+14155238886"
+            },
+            {
+              "name": "To",
+              "value": "={{ $('ParseIntent').item.json.customer_phone }}"
+            },
+            {
+              "name": "Body",
+              "value": "={{ $json.reply_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -144,
+        656
+      ],
+      "id": "cd818a42-6a49-497c-850b-223b43e6edde",
+      "name": "Send Whatsapp Reply - No Order",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "7yaJohfW04JKLQEm",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  json: {\n    ...$json,\n    ticket_phone: String($json.to || '').trim(),\n    ticket_incoming_message: String($('No Order Found').first().json.customer_message || '').trim(),\n    ticket_category: 'General Inquiry',\n    ticket_order_id: String($('No Order Found').first().json.order_id || '').trim(),\n    ticket_summary: String($('No Order Found').first().json.summary || '').trim(),\n    ticket_status: 'Escalated',\n    ticket_resolution_type: 'Human Review',\n    ticket_escalated: true,\n    ticket_reply_text: String($('No Order Found').first().json.reply_text || '').trim(),\n    ticket_customer: String($('No Order Found').first().json.customer_name || '').trim(),\n    ticket_intent_confidence: 0,\n    ticket_refund_amount: 0,\n    ticket_response_time_seconds: 0,\n    ticket_auto_resolved_flag: 0,\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        64,
+        656
+      ],
+      "id": "a827e361-f5ea-43f1-bcb4-f9fdef95c4e5",
+      "name": "Prepare Ticket Record - No Order"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appGHmrQxKT7b6Iim",
+          "mode": "list",
+          "cachedResultName": "Customer Support Ops",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblmxD8oXNyg2hwUG",
+          "mode": "list",
+          "cachedResultName": "Ticket",
+          "cachedResultUrl": "https://airtable.com/appGHmrQxKT7b6Iim/tblmxD8oXNyg2hwUG"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Escalated": true,
+            "Channel": "Whatsapp",
+            "Category": "General Inquiry",
+            "Status": "Escalated",
+            "Resolution Type": "Human Review",
+            "Intent Confidence": 0,
+            "Refund Amount": 0,
+            "Response Time Seconds": 0,
+            "Phone": "={{ $json[\"ticket_phone\"] }}",
+            "Incoming Message": "={{ $json[\"ticket_incoming_message\"] }}",
+            "Order ID": "={{ $json[\"ticket_order_id\"] }}",
+            "AI Summary": "={{ $json[\"ticket_summary\"] }}",
+            "Customer Reply Sent": "={{ $json[\"ticket_reply_text\"] }}",
+            "Customer": "={{ $json[\"ticket_customer\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Ticket ID",
+              "displayName": "Ticket ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Created At",
+              "displayName": "Created At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Channel",
+              "displayName": "Channel",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Whatsapp",
+                  "value": "Whatsapp"
+                },
+                {
+                  "name": "Email",
+                  "value": "Email"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Incoming Message",
+              "displayName": "Incoming Message",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Order Status",
+                  "value": "Order Status"
+                },
+                {
+                  "name": "Refund Request",
+                  "value": "Refund Request"
+                },
+                {
+                  "name": "Wrong Item",
+                  "value": "Wrong Item"
+                },
+                {
+                  "name": "Delayed Package",
+                  "value": "Delayed Package"
+                },
+                {
+                  "name": "Return Request",
+                  "value": "Return Request"
+                },
+                {
+                  "name": "General Inquiry",
+                  "value": "General Inquiry"
+                },
+                {
+                  "name": "Human Escalation",
+                  "value": "Human Escalation"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Order ID",
+              "displayName": "Order ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Intent Confidence",
+              "displayName": "Intent Confidence",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "AI Summary",
+              "displayName": "AI Summary",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "New",
+                  "value": "New"
+                },
+                {
+                  "name": "In Progress",
+                  "value": "In Progress"
+                },
+                {
+                  "name": "Resolved",
+                  "value": "Resolved"
+                },
+                {
+                  "name": "Escalated",
+                  "value": "Escalated"
+                },
+                {
+                  "name": "Refunded",
+                  "value": "Refunded"
+                },
+                {
+                  "name": "Waiting",
+                  "value": "Waiting"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Resolution Type",
+              "displayName": "Resolution Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Auto Reply",
+                  "value": "Auto Reply"
+                },
+                {
+                  "name": "Auto Refund",
+                  "value": "Auto Refund"
+                },
+                {
+                  "name": "Human Review",
+                  "value": "Human Review"
+                },
+                {
+                  "name": "Manual Follow-up",
+                  "value": "Manual Follow-up"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Refund Amount",
+              "displayName": "Refund Amount",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Refund ID",
+              "displayName": "Refund ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Escalated",
+              "displayName": "Escalated",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Assigned To",
+              "displayName": "Assigned To",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Customer Reply Sent",
+              "displayName": "Customer Reply Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Response Time Seconds",
+              "displayName": "Response Time Seconds",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Auto Resolved Flag",
+              "displayName": "Auto Resolved Flag",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Customer",
+              "displayName": "Customer",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        912
+      ],
+      "id": "d77a9c44-acae-4510-885b-a92d0181019f",
+      "name": "Create Ticket Record - No Order",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "dXCdQFhiS8XBicLs",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Message AI Model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ParseIntent": {
+      "main": [
+        [
+          {
+            "node": "Search records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search records": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Prepare Order Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Allow Non-Order Routing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Order Data": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Resolve Order Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve Refund",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve Wrong Item",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve Delay",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve Return",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve General",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Escalate to Human",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Order Status": {
+      "main": [
+        [
+          {
+            "node": "Send Whatsapp Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Whatsapp Reply": {
+      "main": [
+        [
+          {
+            "node": "Prepare Ticket Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Ticket Record": {
+      "main": [
+        [
+          {
+            "node": "Create a record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Refund": {
+      "main": [
+        [
+          {
+            "node": "Send Whatsapp Reply - Refund",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Whatsapp Reply - Refund": {
+      "main": [
+        [
+          {
+            "node": "Prepare Ticket Record - Refund",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Ticket Record - Refund": {
+      "main": [
+        [
+          {
+            "node": "Create Ticket Record - Refund",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Wrong Item": {
+      "main": [
+        [
+          {
+            "node": "Send Whatsapp Reply - Wrong Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Whatsapp Reply - Wrong Item": {
+      "main": [
+        [
+          {
+            "node": "Prepare Ticket Record - Wrong Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Ticket Record - Wrong Item": {
+      "main": [
+        [
+          {
+            "node": "Create Ticket Record - Wrong Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Delay": {
+      "main": [
+        [
+          {
+            "node": "Send Whatsapp Reply - Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Whatsapp Reply - Delay": {
+      "main": [
+        [
+          {
+            "node": "Prepare Ticket Record - Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Ticket Record - Delay": {
+      "main": [
+        [
+          {
+            "node": "Create Ticket Record - Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Ticket Record - Delay": {
+      "main": [
+        []
+      ]
+    },
+    "Resolve Return": {
+      "main": [
+        [
+          {
+            "node": "Send Whatsapp Reply - Return",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Whatsapp Reply - Return": {
+      "main": [
+        [
+          {
+            "node": "Prepare Ticket Record - Return",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Ticket Record - Return": {
+      "main": [
+        [
+          {
+            "node": "Create Ticket Record - Return",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve General": {
+      "main": [
+        [
+          {
+            "node": "Send Whatsapp Reply - General",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Whatsapp Reply - General": {
+      "main": [
+        [
+          {
+            "node": "Prepare Ticket Record - General",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Ticket Record - General": {
+      "main": [
+        [
+          {
+            "node": "Create Ticket Record - General",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Allow Non-Order Routing": {
+      "main": [
+        [
+          {
+            "node": "Prepare Non-Order Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Order Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Non-Order Data": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escalate to Human": {
+      "main": [
+        [
+          {
+            "node": "Send Whatsapp Reply - Human",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Whatsapp Reply - Human": {
+      "main": [
+        [
+          {
+            "node": "Prepare Ticket Record - Human",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Ticket Record - Human": {
+      "main": [
+        [
+          {
+            "node": "Create Ticket Record - Human",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message AI Model": {
+      "main": [
+        [
+          {
+            "node": "ParseIntent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Message AI Model",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Order Found": {
+      "main": [
+        [
+          {
+            "node": "Send Whatsapp Reply - No Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Whatsapp Reply - No Order": {
+      "main": [
+        [
+          {
+            "node": "Prepare Ticket Record - No Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Ticket Record - No Order": {
+      "main": [
+        [
+          {
+            "node": "Create Ticket Record - No Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "32d00a99-a8d7-4541-80a1-fd5df58d7a08",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d361637f1d70339ec01cb1a27fd403eac27fb61b561b025cd2a653356b47936c"
+  },
+  "id": "x2RWmniVtbNN6Kk0UxDbx",
+  "tags": []
+}
