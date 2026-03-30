@@ -1,0 +1,27 @@
+# Testing Guide
+
+## Sample Test Cases
+
+### Order Status
+Where is my order ORD-1001?
+
+### Refund Request
+I want a refund for order ORD-1002
+
+### Wrong Item
+I got the wrong item for order ORD-1003
+
+### Delayed Package
+My package is delayed for order ORD-1001
+
+### Return Request
+I want to return order ORD-1001
+
+### General Inquiry
+What time does your customer support open?
+
+### Human Escalation
+I need urgent help with my account
+
+### No Order Found
+Where is my order ORD-9999?

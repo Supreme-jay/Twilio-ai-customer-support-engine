@@ -1,0 +1,17 @@
+This project is an AI-powered customer support and order resolution system for e-commerce.
+
+It uses Twilio to receive WhatsApp messages, n8n to automate the workflow, Google Gemini to classify customer intent, Airtable to store order and support ticket data, and Airtable Interfaces to display operational metrics.
+
+The system supports:
+- order status checks
+- refund requests
+- wrong item reports
+- delayed package handling
+- return requests
+- general inquiries
+- human escalation
+- invalid order fallback
+
+It also includes:
+- daily analytics reporting
+- automatic workflow error logging
