@@ -68,5 +68,7 @@ workflows/
 screenshots/
 demo-video/
 docs/
+
+Built by Ifeanyi Nwadike
 assets/
 README.md
